@@ -22,6 +22,7 @@ import (
 	"code.cloudfoundry.org/cli/util/configv3"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 )
 
 var _ = Describe("Server", func() {
@@ -175,13 +176,17 @@ var _ = Describe("Server", func() {
 		var (
 			fakePluginActor *rpcfakes.FakePluginActor
 			fakeConfig      *commandfakes.FakeConfig
+			bucket          *gbytes.Buffer
 		)
 
 		BeforeEach(func() {
 			fakePluginActor = new(rpcfakes.FakePluginActor)
 			fakeConfig = new(commandfakes.FakeConfig)
 			outputCapture := terminal.NewTeePrinter(os.Stdout)
+			bucket = gbytes.NewBuffer()
 			terminalOutputSwitch := terminal.NewTeePrinter(os.Stdout)
+
+			outputCapture.SetOutputBucket(bucket)
 
 			rpcService, err = cmdRunner.NewRpcService(outputCapture, terminalOutputSwitch, nil, rpc.DefaultServer, fakeConfig, fakePluginActor)
 			Expect(err).ToNot(HaveOccurred())
@@ -199,6 +204,17 @@ var _ = Describe("Server", func() {
 
 			//give time for server to stop
 			time.Sleep(50 * time.Millisecond)
+		})
+
+		FDescribe("CallCoreCommand", func() {
+			It("calls a core command", func() {
+				var result bool
+				bucket.Write([]byte{"abcd"})
+				err := client.Call("CliRpcCmd.CallCoreCommand", []string{"api"}, &result)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(bucket).To(gbytes.Say("api"))
+			})
 		})
 
 		Describe("GetApp", func() {
